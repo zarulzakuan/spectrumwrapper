@@ -154,8 +154,7 @@ func (m *Models) findModelHandle(c *Connection, names []string, searchType strin
 		return nil, errors.New("No model handles found for these models")
 	}
 
-	tmpl := template.Must(template.ParseFiles("findModelHandle.tmpl"))
-
+	var tmpl = template.Must(template.New("findModelHandleTemplate").Parse(findModelHandleTemplate))
 	contentPart := struct {
 		Modelnames []string
 		Modeltypes []string
@@ -210,7 +209,7 @@ func (m *Models) CreateAlarm(c *Connection, event Event) ([]AlarmCreationResults
 		return createStatuses, errors.New("CauseCode is required")
 	}
 	myurl := fmt.Sprintf(`%s%s%s`, c.OneClickBaseURL, c.OneClickPort, c.RestfulEventsURL)
-	tmpl := template.Must(template.ParseFiles("createAlarm.tmpl"))
+	var tmpl = template.Must(template.New("createAlarmTemplate").Parse(createAlarmTemplate))
 
 	for modelName, modelHandle := range m.ModelNameHandlePair {
 		contentPart := struct {
@@ -282,7 +281,7 @@ func (m *Models) SetModelAttributes(c *Connection, attributes map[string]string)
 
 	for modelName, modelHandle := range m.ModelNameHandlePair {
 
-		tmpl := template.Must(template.ParseFiles("setModelAttributes.tmpl"))
+		var tmpl = template.Must(template.New("setModelAttributesTemplate").Parse(setModelAttributesTemplate))
 
 		contentPart := struct {
 			ModelHandle string
@@ -333,8 +332,7 @@ func (m *Models) GetModelAttributes(c *Connection, attributes []string) ([]Attri
 	if len(attributes) == 0 {
 		return attributeGetResult, errors.New("Attributes are required")
 	}
-
-	tmpl := template.Must(template.ParseFiles("getModelAttributes.tmpl"))
+	var tmpl = template.Must(template.New("getModelAttributesTemplate").Parse(getModelAttributesTemplate))
 
 	contentPart := struct {
 		NameHandlePair map[string]string
