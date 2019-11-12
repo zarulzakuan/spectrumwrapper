@@ -68,6 +68,38 @@ const getModelAttributesTemplate =
     {{end}}
 </rs:model-request>`
 
+const getModelAttributesByAttributesTemplate = 
+`<?xml version="1.0" encoding="UTF-8"?>
+<rs:model-request throttlesize="10000"
+    xmlns:rs="http://www.ca.com/spectrum/restful/schema/request"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ca.com/spectrum/restful/schema/request../../../xsd/Request.xsd ">
+    <rs:landscape id="0x2000000" />
+    <rs:target-models>
+        <rs:models-search>
+            <rs:search-criteria
+                xmlns="http://www.ca.com/spectrum/restful/schema/filter">
+                <filtered-models>
+                    <and>
+                        <or>
+                            {{ range $id, $val := .AttrIDValPair }}
+                            <{{$.Searchtype}}>
+                                <attribute id="{{$id}}">
+                                    <value>{{$val}}</value>
+                                </attribute>
+                            </{{$.Searchtype}}>
+                            {{end}}
+                        </or>
+                    </and>
+                </filtered-models>
+            </rs:search-criteria>
+        </rs:models-search>
+    </rs:target-models>
+	<rs:requested-attribute id="0x1006e" />
+    {{range .Attrs}}
+    <rs:requested-attribute id="{{.}}" />
+    {{end}}
+</rs:model-request>`
+
 const setModelAttributesTemplate = 
 `<?xml version="1.0" encoding="UTF-8"?>
 <rs:update-models-request throttlesize="10000"

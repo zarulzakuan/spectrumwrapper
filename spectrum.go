@@ -33,6 +33,11 @@ type Models struct {
 	ModelTypes          []string
 }
 
+// Attributes holds attributes to be actioned (e.g., looking for models by attributes) details 
+type Attributes struct {
+	AttrIDValPair map[string]string
+}
+
 // Connection holds connection Spectrum API details
 type Connection struct {
 	OneClickBaseURL  string
@@ -64,7 +69,7 @@ type AttributeModResults struct {
 	Status string `json:"attributemod"`
 }
 
-// AttributesList is for get attributes response
+// AttributesList is for get attributes by model handle response
 type AttributesList struct {
 	Mn         string            `json:"modelname"`
 	Mh         string            `json:"modelhandle"`
@@ -95,6 +100,13 @@ func (c *Connection) NewModels(names []string, searchType string) (*Models, erro
 	models.ModelNameHandlePair = result
 
 	return &models, nil
+}
+
+// NewAttributes creates object of attributes that we can use against methods
+func (c *Connection) NewAttributes(IDVal map[string]string) (*Attributes) {
+	var attributes Attributes
+	attributes.AttrIDValPair = IDVal
+	return &attributes
 }
 
 // NewConnection creates a new connection set to Spectrum Restful API (singleton)
@@ -323,8 +335,8 @@ func (m *Models) SetModelAttributes(c *Connection, attributes map[string]string)
 	return attributeModResult, nil
 }
 
-// GetModelAttributes submits single XML to Spectrum API for requesting multiple model attributes for multiple models
-func (m *Models) GetModelAttributes(c *Connection, attributes []string) ([]AttributesList, error) {
+// GetModelAttributesByModel submits single XML to Spectrum API for requesting multiple model attributes for multiple models
+func (m *Models) GetModelAttributesByModel(c *Connection, attributes []string) ([]AttributesList, error) {
 	attributeGetResult := []AttributesList{}
 	var ats = make(map[string]string)
 	myurl := fmt.Sprintf(`%s%s%s`, c.OneClickBaseURL, c.OneClickPort, c.RestfulModelsURL)
@@ -340,6 +352,85 @@ func (m *Models) GetModelAttributes(c *Connection, attributes []string) ([]Attri
 	}{
 		m.ModelNameHandlePair,
 		attributes,
+	}
+
+	var xmlBodyBytes bytes.Buffer
+	if err := tmpl.Execute(&xmlBodyBytes, contentPart); err != nil {
+		return nil, err
+	}
+
+	xmlBody := xmlBodyBytes.String()
+
+	jsonByte, err := c.callAPI(myurl, "POST", xmlBody)
+	if err != nil {
+		return attributeGetResult, err
+	}
+	//fmt.Printf("SPECTRUM ==> %s", string(jsonByte))
+	modelCount := gjson.GetBytes(jsonByte, "model-response-list.@total-models").Int()
+	if modelCount > 0 {
+		if modelCount == 1 {
+			mh := gjson.GetBytes(jsonByte, "model-response-list.model-responses.model.@mh").String()
+			mn := gjson.GetBytes(jsonByte, "model-response-list.model-responses.model.attribute.0.$").String()
+
+			gjson.GetBytes(jsonByte, "model-response-list.model-responses.model.attribute").ForEach(func(key, value gjson.Result) bool {
+				id := gjson.Get(value.String(), "@id").String()
+				val := gjson.Get(value.String(), "$").String()
+				ats[id] = val
+				return true // keep iterating
+			})
+			attr := AttributesList{
+				Mn:         mn,
+				Mh:         mh,
+				Attributes: ats,
+			}
+			attributeGetResult = append(attributeGetResult, attr)
+		} else {
+			gjson.GetBytes(jsonByte, "model-response-list.model-responses.model").ForEach(func(key, value gjson.Result) bool {
+				mh := gjson.Get(value.String(), "@mh").String()
+				mn := gjson.Get(value.String(), "attribute.0.$").String()
+				ats = make(map[string]string) // reinitiate map
+
+				gjson.Get(value.String(), "attribute").ForEach(func(key, value gjson.Result) bool {
+					id := gjson.Get(value.String(), "@id").String()
+					val := gjson.Get(value.String(), "$").String()
+					ats[id] = val
+					return true // keep iterating
+				})
+				attr := AttributesList{
+					Mn:         mn,
+					Mh:         mh,
+					Attributes: ats,
+				}
+				attributeGetResult = append(attributeGetResult, attr)
+				return true // keep iterating
+			})
+		}
+	} else {
+		//return attributeGetResult
+	}
+
+	return attributeGetResult, nil
+}
+
+// GetModelAttributesByAttributes submits single XML to Spectrum API for requesting multiple model attributes for multiple attributes
+func (a *Attributes) GetModelAttributesByAttributes(c *Connection, attributes []string, searchType string) ([]AttributesList, error) {
+	attributeGetResult := []AttributesList{}
+	var ats = make(map[string]string)
+	myurl := fmt.Sprintf(`%s%s%s`, c.OneClickBaseURL, c.OneClickPort, c.RestfulModelsURL)
+
+	if len(attributes) == 0 {
+		return attributeGetResult, errors.New("Attributes are required")
+	}
+	var tmpl = template.Must(template.New("getModelAttributesByAttributesTemplate").Parse(getModelAttributesByAttributesTemplate))
+
+	contentPart := struct {
+		AttrIDValPair map[string]string
+		Attrs         []string
+		Searchtype string
+	}{
+		a.AttrIDValPair,
+		attributes,
+		searchType,
 	}
 
 	var xmlBodyBytes bytes.Buffer
